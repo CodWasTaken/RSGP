@@ -2,7 +2,7 @@
 
 **RSGP is a cloud-first AI Roblox game-building workspace.** Create an account, connect Roblox Studio to a project, ask the AI for changes, review the proposal, then approve selected operations. The site is designed for **Vercel + Supabase**, with a lightweight Roblox Studio plugin. No local server, Fedora desktop client, or Rojo is required.
 
-> **Early MVP source, not yet deployed or live-verified.** It proposes and installs basic parts, GUI labels, and Luau scripts. It does not generate a complete production game, publish experiences, create 3D meshes or audio, or perform automated gameplay verification. Generated Script/LocalScript instances are disabled until you review and enable them.
+> **Early MVP source, not yet deployed or live-verified.** It proposes and installs basic parts, native GUI layouts (labels and visual-only button prototypes), and Luau scripts. It does not generate a complete production game, publish experiences, create 3D meshes or audio, or perform automated gameplay verification. Generated Script/LocalScript instances are disabled until you review and enable them.
 
 ## Set up
 
@@ -11,6 +11,8 @@
 3. Install [studio/RSGP.server.lua](studio/RSGP.server.lua) as a **local Roblox Studio plugin**, not as an in-game Script. Allow the plugin's HTTPS requests if Studio prompts for permission.
 4. Sign in to the site, create a project, generate a one-time pairing code, and paste the HTTPS site origin and code into the Studio plugin. Keep Studio in **Edit mode** while applying operations.
 5. Request a small game feature in the chat. Inspect the proposed operations, approve each intended change, then review the created instances and generated Luau in Studio. Enable scripts only after you review them.
+
+After applying the initial Supabase migration, also apply [the lease-reconciliation migration](supabase/migrations/20260922_rsgp_lease_reconciliation.sql). An expired Studio command is not automatically retried: open the project queue, inspect the actual Studio place, and choose **I see it in Studio** or **Not applied**. That resolution records your report, not independently verified gameplay. Generated GUI buttons are not wired to actions. Review each proposal before approval; use **Reject** to discard unwanted work.
 
 For local website development, copy `.env.example` to `.env.local`, fill the variables, then run `npm install && npm run dev`. Run `npm test`, `npm run typecheck`, and `npm run build` before deploying.
 
