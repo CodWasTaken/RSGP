@@ -123,6 +123,8 @@ export default function Home(){
       <div className="panel"><div className="section-head"><span className="eyebrow">STUDIO CONNECTION</span><span className="mini">Bridge</span></div>
        <h3>Link your Roblox Studio</h3><p className="muted">Install the RSGP plugin and paste a one-time pairing code into it.</p>
        <button className="secondary" disabled={busy} onClick={()=>void action(async()=>setPair(await api("/api/projects/"+projectId+"/pair",{method:"POST"})))}>Generate pairing code</button>
+       <button className="secondary" disabled={busy||!online} onClick={()=>void action(async()=>{await api("/api/projects/"+projectId+"/inspect",{method:"POST"});setNotice("Read-only Studio inventory requested. The result will appear in the build queue.");await refresh();})}>Inspect RSGP objects in Studio ↻</button>
+       <p className="muted">Inventory counts only RSGP-tagged objects in this connected place. It is not a playtest or screenshot check.</p>
        {pair&&<div className="pair-code"><span>EXPIRES {new Date(pair.expiresAt).toLocaleTimeString()}</span><code>{pair.code}</code><button className="text-button" onClick={()=>void navigator.clipboard.writeText(pair.code)}>Copy code</button><small>Plugin endpoint: {pair.origin}</small></div>}
        {state?.connections.filter(c=>c.active).map(c=><div className="connection-row" key={c.id}><span>◉ {c.label}<small>{c.last_seen_at?"Seen "+new Date(c.last_seen_at).toLocaleTimeString():"Awaiting plugin"}</small></span><button className="text-button danger" onClick={()=>void action(async()=>{await api("/api/projects/"+projectId+"/connections",{method:"POST",body:JSON.stringify({connectionId:c.id})});await refresh();})}>Revoke</button></div>)}
       </div>
