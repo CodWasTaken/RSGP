@@ -241,15 +241,38 @@ local function inspectProject(p)
   disabledScripts=disabled,guis=guis,imagePreviews=images,samples=samples,truncated=total>=10000,
   note="Inventory only; no playtest or visual rendering verified"})
 end
-local handlers={create_part=createPart,create_script=createScript,create_gui=createGui,install_image=installImage,inspect_project=inspectProject}
+local function undoCommand(p)
+ local target=p.targetCommandId
+ if type(target)~="string" or not target:match("^[0-9a-f%-]+$") or #target~=36 then
+  error("Invalid undo target")
+ end
+ local matches={}
+ for _,instance in ipairs(CollectionService:GetTagged("RSGPGenerated")) do
+  if instance:IsDescendantOf(game) and instance:GetAttribute("RSGPProjectId")==boundProjectId
+   and instance:GetAttribute("RSGPCommandId")==target then
+   table.insert(matches,instance)
+   if #matches>1 then error("Multiple matching roots; inspect Studio before undoing") end
+  end
+ end
+ if #matches~=1 then error("No uniquely tagged RSGP root found. No object deleted") end
+ local rootInstance=matches[1]
+ if not (rootInstance:IsA("Part") or rootInstance:IsA("ScreenGui") or rootInstance:IsA("Script")
+  or rootInstance:IsA("LocalScript") or rootInstance:IsA("ModuleScript")) then
+  error("Unsupported root type; no object deleted")
+ end
+ local path=rootInstance:GetFullName()
+ rootInstance:Destroy()
+ return "Removed tagged root: "..path.." (its descendants were removed too; verify manually)"
+end
+local handlers={create_part=createPart,create_script=createScript,create_gui=createGui,install_image=installImage,inspect_project=inspectProject,undo_command=undoCommand}
 local function process(command)
  local worked,result=pcall(function()
   if not RunService:IsEdit() then error("Stop playtest before applying changes") end
   if boundStudioId~=currentStudioId() then error("The connected Studio place changed; pair again") end
   if type(command.payload)~="table" or not handlers[command.kind] then error("Unsupported command") end
-  ChangeHistoryService:SetWaypoint("Before RSGP "..command.kind)
+  if command.kind~="inspect_project" then ChangeHistoryService:SetWaypoint("Before RSGP "..command.kind) end
   local path=handlers[command.kind](command.payload,command.id)
-  ChangeHistoryService:SetWaypoint("After RSGP "..command.kind)
+  if command.kind~="inspect_project" then ChangeHistoryService:SetWaypoint("After RSGP "..command.kind) end
   return path
  end)
  local delivered,err=pcall(function()
