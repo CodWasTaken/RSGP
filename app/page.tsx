@@ -8,7 +8,8 @@ type Project={id:string;name:string;created_at:string};
 type Connection={id:string;label:string;studio_id:string;active:boolean;last_seen_at:string|null};
 type Command={id:string;kind:string;payload:Record<string,unknown>;status:string;result:{detail?:string}|null};
 type Message={id:string;role:string;content:string};
-type ImageAsset={id:string;kind:string;prompt:string;status:string;errorCode:string|null;sizeBytes:number|null;createdAt:string;previewUrl:string|null};
+type ImageAsset={id:string;kind:string;prompt:string;status:string;errorCode:string|null;sizeBytes:number|null;createdAt:string;previewUrl:string|null;publicationStatus:string;robloxAssetId:string|null;publicationErrorCode:string|null};
+type RobloxAccount={connected:boolean;status:string;userId:string|null;username:string|null};
 type State={project:Project;connections:Connection[];commands:Command[];messages:Message[]};
 const supabase=browserClient();
 const labels:Record<string,string>={pending_approval:"Review required",queued:"Queued for Studio",leased:"Applying in Studio",needs_reconciliation:"Needs manual reconciliation",completed:"Reported applied",failed:"Failed / rejected"};
@@ -20,6 +21,7 @@ export default function Home(){
  const [projects,setProjects]=useState<Project[]>([]),[projectId,setProjectId]=useState("");
  const [state,setState]=useState<State|null>(null),[name,setName]=useState(""),[prompt,setPrompt]=useState("");
  const [assets,setAssets]=useState<ImageAsset[]>([]),[imagePrompt,setImagePrompt]=useState(""),[imageKind,setImageKind]=useState("icon");
+ const [robloxAccount,setRobloxAccount]=useState<RobloxAccount|null>(null),[manualIds,setManualIds]=useState<Record<string,string>>({});
  const [pair,setPair]=useState<{code:string;origin:string;expiresAt:string}|null>(null);
  const [busy,setBusy]=useState(false),[notice,setNotice]=useState("");
  const projectIdRef=useRef(projectId);
@@ -50,8 +52,9 @@ export default function Home(){
   return ()=>subscription.unsubscribe();
  },[]);
  useEffect(()=>{
-  if(!session){setProjects([]);setProjectId("");setState(null);setAssets([]);return;}
+  if(!session){setProjects([]);setProjectId("");setState(null);setAssets([]);setRobloxAccount(null);return;}
   void api("/api/projects").then(d=>setProjects(d.projects)).catch(e=>setNotice(e.message));
+  void api("/api/roblox/status").then(setRobloxAccount).catch(()=>setRobloxAccount(null));
  },[session,api]);
  useEffect(()=>{
   if(!projectId)return;
@@ -125,7 +128,14 @@ export default function Home(){
       </div>
       <div className="panel asset-panel">
        <div className="section-head"><span className="eyebrow">ASSET LAB</span><span className="mini">{assets.length} recent</span></div>
-       <h3>Print a game asset</h3><p className="muted">Generate a private PNG. Uses API credits. Roblox publication and Studio insertion are not included yet.</p>
+       <h3>Print a game asset</h3><p className="muted">Generate private art, then publish it to Roblox or link a manually uploaded Image ID. Every Studio installation needs your approval.</p>
+       <div className="roblox-account"><strong>Roblox creator</strong>
+        {robloxAccount?.connected?<><small>Connected: {robloxAccount.username||robloxAccount.userId}</small>
+        <button className="text-button danger" disabled={busy} onClick={()=>void action(async()=>{await api("/api/roblox/status",{method:"DELETE"});setRobloxAccount(null);})}>Disconnect from RSGP</button></>:
+        <><small>{robloxAccount?.status==="needs_reconnect"?"Authorization expired or uncertain; reconnect.":"Connect your Roblox account to upload directly using Open Cloud OAuth."}</small>
+         <button className="secondary" disabled={busy} onClick={()=>void action(async()=>{const d=await api("/api/roblox/connect",{method:"POST"});window.location.assign(d.authorizeUrl);})}>Connect Roblox ↗</button>
+        </>}
+       </div>
        <form className="asset-form" onSubmit={e=>{e.preventDefault();void action(async()=>{try{
         await api("/api/projects/"+projectId+"/images",{method:"POST",body:JSON.stringify({kind:imageKind,prompt:imagePrompt,requestId:crypto.randomUUID()})});
         setImagePrompt("");setNotice("Image generated privately. Preview it in the asset library.");
@@ -141,15 +151,47 @@ export default function Home(){
           {asset.previewUrl&&<a href={asset.previewUrl} target="_blank" rel="noopener noreferrer">Open / save PNG ↗</a>}
           {asset.status==="needs_reconciliation"&&<small>Outcome uncertain: do not resubmit automatically.</small>}
           {asset.status==="failed"&&<small>Generation failed: {asset.errorCode||"provider error"}</small>}
+          {asset.status==="ready"&&<div className="asset-actions">
+           {asset.publicationStatus==="not_published"&&<>
+            {robloxAccount?.connected&&<button className="secondary" disabled={busy} onClick={()=>void action(async()=>{
+             await api("/api/projects/"+projectId+"/images/"+asset.id+"/publish",{method:"POST"});
+             setNotice("Roblox upload submitted. Check its moderation status before Studio installation.");
+             await refreshAssets();
+            })}>Publish to Roblox ↗</button>}
+            <form onSubmit={e=>{e.preventDefault();void action(async()=>{
+             await api("/api/projects/"+projectId+"/images/"+asset.id+"/link",{method:"POST",body:JSON.stringify({robloxAssetId:manualIds[asset.id]||""})});
+             await refreshAssets();
+            });}}>
+             <input inputMode="numeric" value={manualIds[asset.id]||""} placeholder="Already uploaded? Image asset ID" onChange={e=>setManualIds(old=>({...old,[asset.id]:e.target.value}))}/>
+             <button className="secondary" disabled={busy}>Link manual ID</button>
+            </form>
+           </>}
+           {["submitted","pending_moderation","uploading"].includes(asset.publicationStatus)&&
+            <button className="secondary" disabled={busy} onClick={()=>void action(async()=>{
+             const d=await api("/api/projects/"+projectId+"/images/"+asset.id+"/publication");
+             setNotice("Roblox publication: "+d.status);await refreshAssets();
+            })}>Check Roblox status ↻</button>}
+           {["approved","manual_unverified"].includes(asset.publicationStatus)&&<>
+            <small>Roblox Image ID: {asset.robloxAssetId} ({asset.publicationStatus==="manual_unverified"?"user-provided, not verified":"moderation approved; Studio use unverified"})</small>
+            <button className="secondary" disabled={busy} onClick={()=>void action(async()=>{
+             await api("/api/projects/"+projectId+"/images/"+asset.id+"/install",{method:"POST"});
+             setNotice("Studio image preview proposed. Review and approve it in the build queue.");
+             await refresh();
+            })}>Propose Studio preview →</button>
+           </>}
+           {asset.publicationStatus==="needs_reconciliation"&&<small>Upload result is uncertain; do not publish this asset again automatically.</small>}
+           {asset.publicationStatus==="failed"&&<small>Roblox publication failed: {asset.publicationErrorCode||"unknown error"}</small>}
+          </div>}
          </div>
         </article>)}</div>
       </div>
       <div className="panel changes"><div className="section-head"><span className="eyebrow">BUILD QUEUE</span><span className="mini">{state?.commands.length||0} changes</span></div>
        {!state?.commands.length?<p className="muted">Your AI-generated changes appear here for review.</p>:state?.commands.map(c=><div className="change" key={c.id}>
-        <div className="change-title"><span className="file-icon">{c.kind==="create_script"?"⌘":c.kind==="create_gui"?"▣":"▧"}</span><strong>{String(c.payload.name||c.kind)}</strong></div>
+        <div className="change-title"><span className="file-icon">{c.kind==="create_script"?"⌘":c.kind==="create_gui"||c.kind==="install_image"?"▣":"▧"}</span><strong>{String(c.payload.name||c.kind)}</strong></div>
         <div className="change-kind">{c.kind.replaceAll("_"," ")} · {labels[c.status]||c.status}</div>
         {c.kind==="create_script"?<details><summary>Preview Luau (disabled on insertion)</summary><pre>{String(c.payload.source)}</pre></details>:
          c.kind==="create_part"?<div className="change-preview">Position: {JSON.stringify(c.payload.position)} · Size: {JSON.stringify(c.payload.size)}</div>:
+         c.kind==="install_image"?<div className="change-preview">Roblox Image ID: {String(c.payload.robloxAssetId)}. This creates a visual preview; actual rendering is not yet verified.</div>:
          c.kind==="create_gui"?<div className="change-preview">Heading: {String(c.payload.title)}<br/>Elements: {Array.isArray(c.payload.elements)?c.payload.elements.map((x:unknown)=>{const element=x as {kind:string;text:string};return element.kind+": "+element.text;}).join(" | "):"None"}</div>:null}
         {c.status==="pending_approval"&&<div className="review-actions">
           <button className="secondary approve" disabled={busy} onClick={()=>void action(async()=>{await api("/api/commands/"+c.id+"/approve",{method:"POST"});await refresh();})}>Approve & send →</button>
