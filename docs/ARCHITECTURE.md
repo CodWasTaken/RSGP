@@ -62,3 +62,18 @@ The lifecycle records `reserved -> generating -> ready`, or `failed` for an expl
 
 Limitations: provider charges and actual entitlements are not measured yet; the counter is a protective cap rather than billing. Vercel function limits and model latency may still cause uncertain results. No provider-side idempotent recovery or automatic reconciliation is claimed. No Roblox upload or Studio installation has been implemented for these images. The migration has not been applied to a real RSGP project.
 
+
+## Creator-owned Roblox Image publication (September 2026 increment)
+
+The fourth SQL migration, `20260922_rsgp_roblox_publication.sql`, adds per-account encrypted Roblox OAuth connections, single-use PKCE state records, publication status fields on generated assets, and an `install_image` command linked to a source asset.
+
+**OAuth boundaries:** Roblox authorizes each user's own account with `openid profile asset:read asset:write`. RSGP registers the exact HTTPS callback, stores AES-256-GCM encrypted access/refresh tokens using a server-only, stable 32-byte key, and receives Roblox identity through the authenticated userinfo endpoint. The server does not expose tokens in browser responses. Roblox refresh tokens rotate once: RSGP conditionally claims one refresh and requires reconnect if the outcome is uncertain. A user can disconnect stored credentials in RSGP; separately revoke the OAuth grant in Roblox. OAuth application registration/review and third-party asset permissions remain Roblox beta capabilities, not assumed enabled in every creator account.
+
+**Publication steps:** An authenticated project owner selects a previously saved private PNG. The server checks OAuth access and claims `not_published -> uploading` exactly once. It downloads the original PNG from private Supabase Storage, verifies SHA-256 and byte count, submits it as type `Image` under that creator's Roblox user ID using Open Cloud Assets, and persists the returned `operations/...` ID and owner identity. An unknown upload outcome moves to `needs_reconciliation`, not an automatic replay. The owner checks the operation and subsequent asset metadata for moderation. `approved` means a Roblox moderation state, **not** ownership/experience-access or rendered Studio verification. Roblox creator group publishing, experience access checks, and publication recovery without an operation ID are not yet implemented.
+
+**Manual fallback:** The creator may download the private PNG, upload it through Roblox Creator Dashboard, and attach their numeric Roblox **Image** ID. RSGP labels this `manual_unverified`, never implying it independently checked uploader ownership, moderation, or target-experience access.
+
+**Studio integration:** The website creates an owner-reviewable `install_image` proposal from an `approved` or `manual_unverified` asset record. A bound Studio plugin creates a native `ScreenGui/ImageLabel` and assigns `rbxassetid://<id>`. The returned path is evidence only that the property was assigned; it is not visual proof that the asset is loaded, approved or usable in the intended place. Gameplay screenshots, failure detection and release verification remain future work. The plugin checks its original place identity before executing commands.
+
+**Deployment:** Requires four SQL migrations in order, dedicated Supabase/Vercel configuration, registered Roblox OAuth app and approved scopes, and a stable token encryption key. No Roblox OAuth credentials, published assets or live Studio runtime have been tested from this repository.
+
