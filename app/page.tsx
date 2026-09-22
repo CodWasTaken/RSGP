@@ -10,7 +10,7 @@ type Command={id:string;kind:string;payload:Record<string,unknown>;status:string
 type Message={id:string;role:string;content:string};
 type State={project:Project;connections:Connection[];commands:Command[];messages:Message[]};
 const supabase=browserClient();
-const labels:Record<string,string>={pending_approval:"Review required",queued:"Queued for Studio",leased:"Applying in Studio",completed:"Applied",failed:"Failed"};
+const labels:Record<string,string>={pending_approval:"Review required",queued:"Queued for Studio",leased:"Applying in Studio",needs_reconciliation:"Needs manual reconciliation",completed:"Reported applied",failed:"Failed / rejected"};
 
 export default function Home(){
  const [session,setSession]=useState<Session|null>(null);
@@ -113,8 +113,20 @@ export default function Home(){
        {!state?.commands.length?<p className="muted">Your AI-generated changes appear here for review.</p>:state?.commands.map(c=><div className="change" key={c.id}>
         <div className="change-title"><span className="file-icon">{c.kind==="create_script"?"⌘":c.kind==="create_gui"?"▣":"▧"}</span><strong>{String(c.payload.name||c.kind)}</strong></div>
         <div className="change-kind">{c.kind.replaceAll("_"," ")} · {labels[c.status]||c.status}</div>
-        {c.kind==="create_script"&&<details><summary>Preview Luau</summary><pre>{String(c.payload.source)}</pre></details>}
-        {c.status==="pending_approval"&&<button className="secondary approve" disabled={busy} onClick={()=>void action(async()=>{await api("/api/commands/"+c.id+"/approve",{method:"POST"});await refresh();})}>Approve & send to Studio →</button>}
+        {c.kind==="create_script"?<details><summary>Preview Luau (disabled on insertion)</summary><pre>{String(c.payload.source)}</pre></details>:
+         c.kind==="create_part"?<div className="change-preview">Position: {JSON.stringify(c.payload.position)} · Size: {JSON.stringify(c.payload.size)}</div>:
+         c.kind==="create_gui"?<div className="change-preview">Heading: {String(c.payload.title)}<br/>Elements: {Array.isArray(c.payload.elements)?c.payload.elements.map((x:unknown)=>{const element=x as {kind:string;text:string};return element.kind+": "+element.text;}).join(" | "):"None"}</div>:null}
+        {c.status==="pending_approval"&&<div className="review-actions">
+          <button className="secondary approve" disabled={busy} onClick={()=>void action(async()=>{await api("/api/commands/"+c.id+"/approve",{method:"POST"});await refresh();})}>Approve & send →</button>
+          <button className="text-button danger" disabled={busy} onClick={()=>void action(async()=>{await api("/api/commands/"+c.id+"/reject",{method:"POST"});await refresh();})}>Reject</button>
+         </div>}
+        {c.status==="needs_reconciliation"&&<div className="reconcile">
+          <p>Studio may have applied this change. Inspect the place before resolving it. RSGP will not retry automatically.</p>
+          <div className="review-actions">
+           <button className="secondary" disabled={busy} onClick={()=>void action(async()=>{await api("/api/commands/"+c.id+"/reconcile",{method:"POST",body:JSON.stringify({outcome:"applied"})});await refresh();})}>I see it in Studio</button>
+           <button className="text-button danger" disabled={busy} onClick={()=>void action(async()=>{await api("/api/commands/"+c.id+"/reconcile",{method:"POST",body:JSON.stringify({outcome:"not_applied"})});await refresh();})}>Not applied</button>
+          </div>
+         </div>}
         {c.result?.detail&&<small className="muted">{c.result.detail}</small>}
        </div>)}
       </div>
