@@ -113,26 +113,70 @@ local function createScript(p)
 end
 local function createGui(p)
  local color=number3(p.color,0,255)
+ local elements=p.elements or {}
+ if type(elements)~="table" or #elements>8 then error("Invalid GUI elements") end
+ for _,entry in ipairs(elements) do
+  if type(entry)~="table" or (entry.kind~="label" and entry.kind~="button") or type(entry.text)~="string" or #entry.text<1 or #entry.text>80 then
+   error("Invalid GUI element")
+  end
+ end
  local gui=Instance.new("ScreenGui")
  gui.Name=safeName(p.name)
  gui.ResetOnSpawn=false
  local frame=Instance.new("Frame")
- frame.Size=UDim2.fromOffset(340,75)
- frame.Position=UDim2.new(.5,-170,0,24)
+ frame.Name="Panel"
+ frame.AnchorPoint=Vector2.new(.5,0)
+ frame.Size=UDim2.new(.9,0,0,65+(#elements*44))
+ frame.Position=UDim2.new(.5,0,0,24)
  frame.BackgroundColor3=Color3.fromRGB(color.X,color.Y,color.Z)
  frame.Parent=gui
+ local maxWidth=Instance.new("UISizeConstraint")
+ maxWidth.MaxSize=Vector2.new(400,440)
+ maxWidth.Parent=frame
  local corner=Instance.new("UICorner")
  corner.CornerRadius=UDim.new(0,12)
  corner.Parent=frame
+ local pad=Instance.new("UIPadding")
+ pad.PaddingTop=UDim.new(0,8)
+ pad.PaddingLeft=UDim.new(0,10)
+ pad.PaddingRight=UDim.new(0,10)
+ pad.Parent=frame
+ local layout=Instance.new("UIListLayout")
+ layout.Padding=UDim.new(0,6)
+ layout.FillDirection=Enum.FillDirection.Vertical
+ layout.Parent=frame
  local heading=Instance.new("TextLabel")
- heading.Size=UDim2.fromScale(1,1)
+ heading.Name="Heading"
+ heading.Size=UDim2.new(1,0,0,43)
  heading.Text=string.sub(tostring(p.title or ""),1,100)
  heading.TextScaled=true
  heading.TextColor3=Color3.new(1,1,1)
  heading.BackgroundTransparency=1
+ heading.LayoutOrder=0
  heading.Parent=frame
+ for index,entry in ipairs(elements) do
+  local child=Instance.new(entry.kind=="button" and "TextButton" or "TextLabel")
+  child.Name=string.format("Element%02d",index)
+  child.Size=UDim2.new(1,0,0,36)
+  child.LayoutOrder=index
+  child.Text=entry.text
+  child.TextColor3=Color3.new(1,1,1)
+  child.TextScaled=true
+  child.TextWrapped=true
+  child.BackgroundTransparency=entry.kind=="button" and 0 or 1
+  child.BackgroundColor3=Color3.fromRGB(35,33,52)
+  if entry.kind=="button" then
+   -- UI is a visual prototype; no behavior is attached until reviewed Luau is wired.
+   child.Active=false
+   child.AutoButtonColor=false
+   local childCorner=Instance.new("UICorner")
+   childCorner.CornerRadius=UDim.new(0,8)
+   childCorner.Parent=child
+  end
+  child.Parent=frame
+ end
  gui.Parent=game:GetService("StarterGui")
- return gui:GetFullName()
+ return gui:GetFullName().." (visual layout; buttons are not wired)"
 end
 local handlers={create_part=createPart,create_script=createScript,create_gui=createGui}
 local function process(command)
