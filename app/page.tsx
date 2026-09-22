@@ -22,6 +22,7 @@ export default function Home(){
  const [state,setState]=useState<State|null>(null),[name,setName]=useState(""),[prompt,setPrompt]=useState("");
  const [assets,setAssets]=useState<ImageAsset[]>([]),[imagePrompt,setImagePrompt]=useState(""),[imageKind,setImageKind]=useState("icon");
  const [robloxAccount,setRobloxAccount]=useState<RobloxAccount|null>(null),[manualIds,setManualIds]=useState<Record<string,string>>({});
+ const [studioTargets,setStudioTargets]=useState<Record<string,string>>({});
  const [pair,setPair]=useState<{code:string;origin:string;expiresAt:string}|null>(null);
  const [busy,setBusy]=useState(false),[notice,setNotice]=useState("");
  const projectIdRef=useRef(projectId);
@@ -80,7 +81,10 @@ export default function Home(){
   setBusy(true);setNotice("");
   try{await fn();}catch(e){setNotice((e as Error).message);}finally{setBusy(false);}
  }
- const online=state?.connections.some(c=>c.active&&c.last_seen_at&&Date.now()-Date.parse(c.last_seen_at)<20000);
+ const liveConnections=state?.connections.filter(c=>c.active&&c.last_seen_at&&Date.now()-Date.parse(c.last_seen_at)<20000)||[];
+ const online=liveConnections.length>0;
+ const requestedTarget=studioTargets[projectId];
+ const targetConnectionId=liveConnections.length===1?liveConnections[0].id:liveConnections.find(c=>c.id===requestedTarget)?.id||"";
  if(!session)return <main className="login-shell"><section className="login-card">
   <div className="brand"><span className="logo-mark">R</span><span>RSGP <small>STUDIO GAME PRINTER</small></span></div>
   <div className="hero-tag">YOUR ROBLOX WORKSHOP, ONLINE</div>
@@ -123,7 +127,9 @@ export default function Home(){
       <div className="panel"><div className="section-head"><span className="eyebrow">STUDIO CONNECTION</span><span className="mini">Bridge</span></div>
        <h3>Link your Roblox Studio</h3><p className="muted">Install the RSGP plugin and paste a one-time pairing code into it.</p>
        <button className="secondary" disabled={busy} onClick={()=>void action(async()=>setPair(await api("/api/projects/"+projectId+"/pair",{method:"POST"})))}>Generate pairing code</button>
-       <button className="secondary" disabled={busy||!online} onClick={()=>void action(async()=>{await api("/api/projects/"+projectId+"/inspect",{method:"POST"});setNotice("Read-only Studio inventory requested. The result will appear in the build queue.");await refresh();})}>Inspect RSGP objects in Studio ↻</button>
+       {liveConnections.length>1&&<label className="target-select">Target Studio place<select value={targetConnectionId} onChange={e=>setStudioTargets(old=>({...old,[projectId]:e.target.value}))}><option value="">Select a specific place</option>{liveConnections.map(c=><option key={c.id} value={c.id}>{c.label} ({c.studio_id})</option>)}</select></label>}
+       {liveConnections.length===1&&<p className="muted">Target: {liveConnections[0].label} ({liveConnections[0].studio_id})</p>}
+       <button className="secondary" disabled={busy||!targetConnectionId} onClick={()=>void action(async()=>{await api("/api/projects/"+projectId+"/inspect",{method:"POST",body:JSON.stringify({connectionId:targetConnectionId})});setNotice("Read-only Studio inventory requested for the selected place. The result will appear in the build queue.");await refresh();})}>Inspect RSGP objects in Studio ↻</button>
        <p className="muted">Inventory counts only RSGP-tagged objects in this connected place. It is not a playtest or screenshot check.</p>
        {pair&&<div className="pair-code"><span>EXPIRES {new Date(pair.expiresAt).toLocaleTimeString()}</span><code>{pair.code}</code><button className="text-button" onClick={()=>void navigator.clipboard.writeText(pair.code)}>Copy code</button><small>Plugin endpoint: {pair.origin}</small></div>}
        {state?.connections.filter(c=>c.active).map(c=><div className="connection-row" key={c.id}><span>◉ {c.label}<small>{c.last_seen_at?"Seen "+new Date(c.last_seen_at).toLocaleTimeString():"Awaiting plugin"}</small></span><button className="text-button danger" onClick={()=>void action(async()=>{await api("/api/projects/"+projectId+"/connections",{method:"POST",body:JSON.stringify({connectionId:c.id})});await refresh();})}>Revoke</button></div>)}
@@ -189,14 +195,17 @@ export default function Home(){
       </div>
       <div className="panel changes"><div className="section-head"><span className="eyebrow">BUILD QUEUE</span><span className="mini">{state?.commands.length||0} changes</span></div>
        {!state?.commands.length?<p className="muted">Your AI-generated changes appear here for review.</p>:state?.commands.map(c=><div className="change" key={c.id}>
-        <div className="change-title"><span className="file-icon">{c.kind==="create_script"?"⌘":c.kind==="create_gui"||c.kind==="install_image"?"▣":"▧"}</span><strong>{String(c.payload.name||c.kind)}</strong></div>
+        <div className="change-title"><span className="file-icon">{c.kind==="create_script"?"⌘":c.kind==="create_gui"||c.kind==="install_image"?"▣":c.kind==="undo_command"?"↶":c.kind==="inspect_project"?"⌕":"▧"}</span><strong>{String(c.payload.name||c.kind)}</strong></div>
         <div className="change-kind">{c.kind.replaceAll("_"," ")} · {labels[c.status]||c.status}</div>
-        {c.kind==="create_script"?<details><summary>Preview Luau (disabled on insertion)</summary><pre>{String(c.payload.source)}</pre></details>:
+        {c.kind==="undo_command"?<p className="change-preview">Undo tagged command {String(c.payload.targetCommandId)}. Deletes its single tagged root and descendants; inspect Studio first.</p>:
+         c.kind==="inspect_project"?<p className="change-preview">Read-only inventory of newly RSGP-tagged objects. No gameplay verification.</p>:
+         c.kind==="create_script"?<details><summary>Preview Luau (disabled on insertion)</summary><pre>{String(c.payload.source)}</pre></details>:
          c.kind==="create_part"?<div className="change-preview">Position: {JSON.stringify(c.payload.position)} · Size: {JSON.stringify(c.payload.size)}</div>:
          c.kind==="install_image"?<div className="change-preview">Roblox Image ID: {String(c.payload.robloxAssetId)}. This creates a visual preview; actual rendering is not yet verified.</div>:
          c.kind==="create_gui"?<div className="change-preview">Heading: {String(c.payload.title)}<br/>Elements: {Array.isArray(c.payload.elements)?c.payload.elements.map((x:unknown)=>{const element=x as {kind:string;text:string};return element.kind+": "+element.text;}).join(" | "):"None"}</div>:null}
+        {c.status==="completed"&&["create_part","create_script","create_gui","install_image"].includes(c.kind)&&!state?.commands.some(u=>u.kind==="undo_command"&&u.payload.targetCommandId===c.id&&["pending_approval","queued","leased","needs_reconciliation","completed"].includes(u.status))&&<button className="text-button danger" disabled={busy} onClick={()=>void action(async()=>{await api("/api/commands/"+c.id+"/undo",{method:"POST"});setNotice("Undo proposed. Inspect its scope and approve for the intended Studio place.");await refresh();})}>Propose undo ↶</button>}
         {c.status==="pending_approval"&&<div className="review-actions">
-          <button className="secondary approve" disabled={busy} onClick={()=>void action(async()=>{await api("/api/commands/"+c.id+"/approve",{method:"POST"});await refresh();})}>Approve & send →</button>
+          <button className="secondary approve" disabled={busy||!targetConnectionId} onClick={()=>void action(async()=>{await api("/api/commands/"+c.id+"/approve",{method:"POST",body:JSON.stringify({connectionId:targetConnectionId})});await refresh();})}>{c.kind==="undo_command"?"Approve undo in Studio →":"Approve & send →"}</button>
           <button className="text-button danger" disabled={busy} onClick={()=>void action(async()=>{await api("/api/commands/"+c.id+"/reject",{method:"POST"});await refresh();})}>Reject</button>
          </div>}
         {c.status==="needs_reconciliation"&&<div className="reconcile">
