@@ -1,4 +1,5 @@
 import {admin,authenticate,bodyJson,HttpError,jsonError,requireProject} from "@/lib/supabase";
+import {isLiveStudioTarget} from "@/lib/studio-review";
 export const runtime="nodejs";
 type Ctx={params:Promise<{id:string}>};
 // Explicit owner-requested, read-only inventory of instances RSGP has tagged in Studio.
@@ -10,11 +11,11 @@ export async function POST(req:Request,{params}:Ctx){
   if(typeof connectionId!=="string"||!/^[0-9a-f-]{36}$/i.test(connectionId))throw new HttpError(400,"Select a Studio session");
   const db=admin();
   const {data:connections,error:connectionError}=await db.from("studio_connections")
-   .select("id,last_seen_at").eq("id",connectionId).eq("project_id",id).eq("owner_id",uid).eq("active",true)
+   .select("id,studio_id,owner_id,project_id,active,last_seen_at").eq("id",connectionId).eq("project_id",id).eq("owner_id",uid).eq("active",true)
    .limit(1);
   if(connectionError)throw connectionError;
   const connection=connections?.[0];
-  if(!connection||!connection.last_seen_at||Date.now()-Date.parse(connection.last_seen_at)>20000)
+  if(!isLiveStudioTarget(connection,id,uid))
    throw new HttpError(409,"Connect an active Studio plugin before requesting inventory");
   const {data:recent,error:recentError}=await db.from("commands")
    .select("id").eq("project_id",id).eq("owner_id",uid).eq("kind","inspect_project")
