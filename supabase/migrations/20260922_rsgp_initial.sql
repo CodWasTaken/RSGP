@@ -1,5 +1,5 @@
 -- RSGP schema. The project owner approved repurposing RobloxGPT Community Dev on 2026-09-22.
--- Check table and migration inventory before applying; this SQL creates tables, never deletes old data.
+-- Applied to the owner-approved, restored project on 2026-09-22. Retains pre-existing Auth and community/private data.
 create extension if not exists pgcrypto;
 create table public.projects (
  id uuid primary key default gen_random_uuid(),
