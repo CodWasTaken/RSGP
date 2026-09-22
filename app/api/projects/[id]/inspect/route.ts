@@ -1,4 +1,4 @@
-import {admin,authenticate,HttpError,jsonError,requireProject} from "@/lib/supabase";
+import {admin,authenticate,bodyJson,HttpError,jsonError,requireProject} from "@/lib/supabase";
 export const runtime="nodejs";
 type Ctx={params:Promise<{id:string}>};
 // Explicit owner-requested, read-only inventory of instances RSGP has tagged in Studio.
@@ -6,10 +6,12 @@ export async function POST(req:Request,{params}:Ctx){
  try{
   const {id}=await params,uid=await authenticate(req);
   await requireProject(uid,id);
+  const body=await bodyJson(req),connectionId=body.connectionId;
+  if(typeof connectionId!=="string"||!/^[0-9a-f-]{36}$/i.test(connectionId))throw new HttpError(400,"Select a Studio session");
   const db=admin();
   const {data:connections,error:connectionError}=await db.from("studio_connections")
-   .select("id,last_seen_at").eq("project_id",id).eq("owner_id",uid).eq("active",true)
-   .order("last_seen_at",{ascending:false}).limit(1);
+   .select("id,last_seen_at").eq("id",connectionId).eq("project_id",id).eq("owner_id",uid).eq("active",true)
+   .limit(1);
   if(connectionError)throw connectionError;
   const connection=connections?.[0];
   if(!connection||!connection.last_seen_at||Date.now()-Date.parse(connection.last_seen_at)>20000)
