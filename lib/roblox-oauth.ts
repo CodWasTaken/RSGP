@@ -69,7 +69,7 @@ export async function robloxIdentity(accessToken:string){
 export async function connectedRobloxAccess(ownerId:string){
  const db=admin();
  const {data:row,error}=await db.from("roblox_connections")
-  .select("access_cipher,refresh_cipher,access_expires_at,status,refresh_claimed_at,roblox_user_id")
+  .select("access_cipher,refresh_cipher,access_expires_at,status,refresh_claimed_at,roblox_user_id,updated_at")
   .eq("owner_id",ownerId).maybeSingle();
  if(error)throw error;
  if(!row||row.status==="needs_reconnect")throw new HttpError(409,"Connect your Roblox account to publish assets");
@@ -81,7 +81,7 @@ export async function connectedRobloxAccess(ownerId:string){
  const started=new Date().toISOString();
  const {data:claim,error:claimError}=await db.from("roblox_connections")
   .update({status:"refreshing",refresh_claimed_at:started})
-  .eq("owner_id",ownerId).eq("status","connected").eq("access_cipher",row.access_cipher)
+  .eq("owner_id",ownerId).eq("status","connected").eq("updated_at",row.updated_at)
   .select("owner_id").maybeSingle();
  if(claimError)throw claimError;
  if(!claim)throw new HttpError(409,"Roblox authorization changed; check again");
