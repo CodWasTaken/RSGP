@@ -22,6 +22,9 @@
 .asset-description a{color:#b89aff;font-weight:700;font-size:11px}
 .asset-description small{display:block;color:#e2bd80;font-size:11px;margin-top:5px}
 
+/* A configuration banner prevents a deployed shell from appearing fully operational. */
+.setup-alert{background:#34291a;border:1px solid #a37d45;border-radius:9px;padding:12px 14px;margin:14px 0;color:#ffe1a5;font-size:12px;line-height:1.55}
+
 /* Explicit connection selection guards all user-approved Studio mutations. */
 .target-select{display:grid;gap:6px;font-size:12px;color:#d0c9ea;margin:10px 0}
 .target-select select{width:100%;min-width:0;padding:9px 11px;border:1px solid #696084;border-radius:9px;background:#151525;color:#f5f2ff}

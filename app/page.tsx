@@ -11,6 +11,7 @@ type Message={id:string;role:string;content:string};
 type ImageAsset={id:string;kind:string;prompt:string;status:string;errorCode:string|null;sizeBytes:number|null;createdAt:string;previewUrl:string|null;publicationStatus:string;robloxAssetId:string|null;publicationErrorCode:string|null};
 type RobloxAccount={connected:boolean;status:string;userId:string|null;username:string|null};
 type State={project:Project;connections:Connection[];commands:Command[];messages:Message[]};
+type SetupStatus={accountReady:boolean;aiReady:boolean;robloxUploadReady:boolean};
 const supabase=browserClient();
 const labels:Record<string,string>={pending_approval:"Review required",queued:"Queued for Studio",leased:"Applying in Studio",needs_reconciliation:"Needs manual reconciliation",completed:"Reported applied",failed:"Failed / rejected"};
 
@@ -25,6 +26,7 @@ export default function Home(){
  const [studioTargets,setStudioTargets]=useState<Record<string,string>>({});
  const [pair,setPair]=useState<{code:string;origin:string;expiresAt:string}|null>(null);
  const [busy,setBusy]=useState(false),[notice,setNotice]=useState("");
+ const [setup,setSetup]=useState<SetupStatus|null>(null);
  const projectIdRef=useRef(projectId);
  projectIdRef.current=projectId;
  const api=useCallback(async (path:string,options:RequestInit={})=>{
@@ -47,6 +49,13 @@ export default function Home(){
   try{const data=await api("/api/projects/"+id+"/state");if(projectIdRef.current===id)setState(data);}
   catch{/* transient polling failure */}
  },[api]);
+ useEffect(()=>{
+  void fetch("/api/status",{cache:"no-store"}).then(async response=>{
+   if(!response.ok)throw Error("Setup status unavailable");
+   const data:SetupStatus=await response.json();
+   if(typeof data.accountReady==="boolean"&&typeof data.aiReady==="boolean"&&typeof data.robloxUploadReady==="boolean")setSetup(data);
+  }).catch(()=>{/* Unavailable status must not be misreported as configured. */});
+ },[]);
  useEffect(()=>{
   void supabase.auth.getSession().then(({data})=>setSession(data.session));
   const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,current)=>setSession(current));
@@ -90,10 +99,12 @@ export default function Home(){
   <div className="hero-tag">YOUR ROBLOX WORKSHOP, ONLINE</div>
   <h1>From an idea<br/>to a real game.</h1>
   <p>Plan, build and refine your Roblox experience in one connected workspace.</p>
+  {setup&&!setup.accountReady&&<p className="setup-alert" role="status">RSGP is being configured. Project access is unavailable until the administrator adds the server-side Supabase credential.</p>}
+  {setup?.accountReady&&!setup.aiReady&&<p className="setup-alert" role="status">Game-building AI is not configured yet. The administrator must add the server-side AI credential.</p>}
   <form onSubmit={auth}>
    <label>Email<input type="email" value={email} onChange={e=>setEmail(e.target.value)} required placeholder="you@example.com"/></label>
    <label>Password<input type="password" minLength={6} value={password} onChange={e=>setPassword(e.target.value)} required placeholder="At least 6 characters"/></label>
-   <button className="primary" disabled={busy}>{loginMode==="login"?"Sign in →":"Create account →"}</button>
+   <button className="primary" disabled={busy||setup?.accountReady===false}>{loginMode==="login"?"Sign in →":"Create account →"}</button>
   </form>
   <button className="text-button" onClick={()=>setLoginMode(loginMode==="login"?"signup":"login")}>{loginMode==="login"?"New here? Create an account":"Already have an account? Sign in"}</button>
   {notice&&<p className="notice">{notice}</p>}
@@ -110,6 +121,8 @@ export default function Home(){
    <div className="sidebar-footer"><span>{session.user.email}</span><button className="text-button" onClick={()=>void supabase.auth.signOut()}>Sign out</button></div>
   </aside>
   <main className="workspace">
+   {setup&&!setup.accountReady&&<div className="setup-alert" role="status">Project access is unavailable until the administrator finishes the server-side Supabase configuration.</div>}
+   {setup?.accountReady&&!setup.aiReady&&<div className="setup-alert" role="status">AI generation is not configured. Existing project data remains accessible.</div>}
    {!projectId?<section className="empty"><div className="big-mark">✦</div><h1>What will you build?</h1><p>Create a project on the left to start your Roblox game.</p></section>:<>
     <header className="topbar"><div><span className="eyebrow">WORKSPACE / {state?.project.name??"LOADING"}</span><h1>{state?.project.name||"Your project"}</h1></div><div className="connection"><span className={"dot "+(online?"online":"")}></span>{online?"Studio connected":"Studio offline"}</div></header>
     <div className="columns">
