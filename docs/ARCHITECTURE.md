@@ -42,3 +42,12 @@ Roblox Studio plugin -- HTTPS claim/poll/report ----+
 ## Existing work and references
 
 RSGP follows the *architectural ideas* of the privately owned `CodWasTaken/RobloxGPT-Studio` (project context, guarded mutations, evidence-backed validation), but it does **not copy that private repository** into this public one. The ForgeGUI public Claude Code integration is treated as a documented capability/workflow reference, not vendored or used to bypass its hosted backend. RSGP's plugin is independently implemented and does not use Lemonade's proprietary code. Roblox Studio's official MCP remains a possible future optional tool backend, not an installed dependency.
+
+## Studio queue recovery and GUI scope (September 2026 increment)
+
+Apply `20260922_rsgp_lease_reconciliation.sql` after the initial schema. Each queued command gets a unique random lease ID at dispatch, and the plugin echoes that lease ID when reporting an outcome. A receipt requires an active matching, unexpired lease; the server refuses stale or mismatched receipts. Expired leases move to `needs_reconciliation`, and neither the API nor the Studio plugin retries them automatically. The owner must inspect the place and report **applied** or **not applied**; this is a human report, not automatic verification. The plugin pauses after an uncertain result submission.
+
+The review queue supports explicit rejection before an operation is delivered. Generated GUI proposals may now contain up to eight native text labels or visual-only buttons. The plugin uses Roblox `ScreenGui`, `Frame`, `TextLabel`, `TextButton`, `UIListLayout`, and `UISizeConstraint`; it does not auto-execute a button handler. A request for functional UI still needs reviewed script wiring and actual gameplay validation.
+
+**Known remaining limitations:** one-minute leases are not refreshed during long operations; result delivery may require manual resolution even when an instance was successfully created. There is no transactionally atomic multi-command game build, full project backup, automated rollback, or independent verification that user-reported reconciliation is correct. The current command validation enforces shape, not full semantic safety of generated Luau. Studio behavior has not been live-tested.
+
