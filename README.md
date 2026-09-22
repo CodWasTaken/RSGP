@@ -2,7 +2,7 @@
 
 **RSGP is a cloud-first AI Roblox game-building workspace.** Create an account, connect Roblox Studio to a project, ask the AI for changes, review the proposal, then approve selected operations. The site is designed for **Vercel + Supabase**, with a lightweight Roblox Studio plugin. No local server, Fedora desktop client, or Rojo is required.
 
-> **Early MVP source, not yet deployed or live-verified.** It proposes and installs basic parts, native GUI layouts (labels and visual-only button prototypes), and Luau scripts. It does not generate a complete production game, publish experiences, create 3D meshes or audio, or perform automated gameplay verification. Generated Script/LocalScript instances are disabled until you review and enable them.
+> **Early MVP source, not yet deployed or live-verified.** It proposes and installs basic parts, native GUI layouts (labels and visual-only button prototypes), and Luau scripts. It does not generate a complete production game, publish experiences, create 3D meshes or audio, or perform automated gameplay verification. The Asset Lab can generate private PNGs through a configured server-side image API, but cannot yet upload them to Roblox. Generated Script/LocalScript instances are disabled until you review and enable them.
 
 ## Set up
 
@@ -13,6 +13,14 @@
 5. Request a small game feature in the chat. Inspect the proposed operations, approve each intended change, then review the created instances and generated Luau in Studio. Enable scripts only after you review them.
 
 After applying the initial Supabase migration, also apply [the lease-reconciliation migration](supabase/migrations/20260922_rsgp_lease_reconciliation.sql). An expired Studio command is not automatically retried: open the project queue, inspect the actual Studio place, and choose **I see it in Studio** or **Not applied**. That resolution records your report, not independently verified gameplay. Generated GUI buttons are not wired to actions. Review each proposal before approval; use **Reject** to discard unwanted work.
+
+### Image Asset Lab
+
+Apply [the generated-assets migration](supabase/migrations/20260922_rsgp_generated_assets.sql) **after the initial and lease-reconciliation migrations**. It creates a private `rsgp-generated` Storage bucket and a per-project asset ledger. RSGP's server uses `RSGP_IMAGE_MODEL` (default: `gpt-image-1-mini`) and the existing server-only `OPENAI_API_KEY` to create one low-quality PNG for each explicitly submitted image-generation request.
+
+The project page can generate icons, thumbnails, textures, and GUI art, then preview and open saved images using five-minute signed URLs. The server reserves one of **three image generations per account per hour and ten per account per rolling 24 hours** in an atomic database transaction. Limits count attempts even when they fail, and are an interim safety ceiling—not a subscription plan, price quote, or guarantee of available OpenAI credits.
+
+Each request has a unique ID and is atomically claimed before the provider call. Duplicates do not trigger another billable call. Timeouts, uncertain provider outcomes, and upload failures are recorded as `needs_reconciliation`; they are never automatically retried. RSGP does not yet have automatic provider-side reconciliation or Roblox image publishing. A generated PNG is not a Roblox asset ID or evidence of Studio installation.
 
 For local website development, copy `.env.example` to `.env.local`, fill the variables, then run `npm install && npm run dev`. Run `npm test`, `npm run typecheck`, and `npm run build` before deploying.
 
