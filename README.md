@@ -6,7 +6,7 @@
 
 ## Set up
 
-1. Use the **repurposed RobloxGPT Community Dev Supabase project** (`qznmxbwhotgwmcrskdtd`) as RSGP's database. It was restored to `ACTIVE_HEALTHY` and all four RSGP migrations were applied on September 22, 2026. The existing Auth user, two RGPT migrations, and legacy `community`/`private` tables were retained. Configure email/password sign-up, your site URL and SMTP/confirmation redirects as needed. Do not rerun already applied migrations.
+1. Use the **repurposed RobloxGPT Community Dev Supabase project** (`qznmxbwhotgwmcrskdtd`) as RSGP's database. It was restored to `ACTIVE_HEALTHY` and all five RSGP migrations were applied on September 22, 2026. The existing Auth user, two RGPT migrations, and legacy `community`/`private` tables were retained. Configure email/password sign-up, your site URL and SMTP/confirmation redirects as needed. Do not rerun already applied migrations.
 2. Import this repository into **Vercel** as a Next.js app. Set the environment variables in [.env.example](.env.example): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, `OPENAI_MODEL`, and `NEXT_PUBLIC_RSGP_ORIGIN`. The last one should be your public HTTPS Vercel origin. Keep the service-role and OpenAI keys server-only.
 3. Install [studio/RSGP.server.lua](studio/RSGP.server.lua) as a **local Roblox Studio plugin**, not as an in-game Script. Allow the plugin's HTTPS requests if Studio prompts for permission.
 4. Sign in to the site, create a project, generate a one-time pairing code, and paste the HTTPS site origin and code into the Studio plugin. Keep Studio in **Edit mode** while applying operations.
@@ -31,6 +31,12 @@ Each signed-in creator connects their **own** Roblox account. RSGP encrypts acce
 Without OAuth, download the PNG, upload it in Roblox Creator Dashboard as an **Image**, then paste its numeric asset ID into the asset's **Link manual ID** form. Such an ID is *user-reported, not independently verified*. In either case, click **Propose Studio preview**, then inspect and approve the `install_image` operation in the build queue. The Studio plugin creates a non-interactive `ScreenGui` preview in the paired place and reports only the assigned Image property. Generated icons, thumbnails and textures are displayed as previews—not automatically assigned to a published game icon, store thumbnail or material.
 
 Disconnecting in RSGP deletes stored OAuth credentials; to revoke Roblox authorization as well, use Roblox's connected-app controls. Never share the application's client secret, encryption key or personal tokens.
+
+### Exact Studio targeting and scoped undo
+
+RSGP displays the live Studio place identity in each project and requires you to **select a target when multiple Studio sessions are connected**. Before sending an approved proposal, the server checks the selected session is active, recently seen, owned by the signed-in user, and paired with that project. It no longer routes an approval to the most recently seen session without your input. The same target selection applies to the read-only inventory.
+
+[The fifth, additive migration](supabase/migrations/20260922_rsgp_command_undo.sql) is already applied in the repurposed database. For a command reported applied, the queue can propose an explicit `undo_command`. After you review and approve it for the intended live Studio place, the plugin looks for **exactly one** root bearing the original command ID and matching RSGP project ID, then destroys that root (including its descendants). Roblox Studio change-history waypoints bracket the operation. If a root is missing, untagged, duplicated, or of an unexpected class, undo fails closed without deleting anything. Existing manually edited descendants would also be deleted; back up valuable places first. This is per-operation deletion, **not** full project snapshots, transaction rollback, or undo for objects created by older untagged plugins. A lost undo result must be manually reconciled, not replayed.
 
 ### Read-only Studio inventory
 
