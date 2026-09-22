@@ -145,9 +145,12 @@ local function process(command)
   return path
  end)
  local delivered,err=pcall(function()
-  request("POST","/api/plugin/result",{commandId=command.id,success=worked,detail=string.sub(tostring(result),1,800)})
+  request("POST","/api/plugin/result",{commandId=command.id,leaseId=command.leaseId,success=worked,detail=string.sub(tostring(result),1,800)})
  end)
- if not delivered then setStatus("Result delivery failed; reconcile before repeating: "..tostring(err))
+ if not delivered then
+  setStatus("Result delivery uncertain. Inspect Studio and reconcile on the site: "..tostring(err))
+  running=false
+  token=nil
  else setStatus((worked and "Applied: " or "Failed: ")..tostring(result)) end
 end
 connectBtn.MouseButton1Click:Connect(function()
