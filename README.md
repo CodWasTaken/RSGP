@@ -6,7 +6,7 @@
 
 ## Set up
 
-1. Create a **new RSGP Supabase project**, not the existing RobloxGPT Community Dev database. Apply [supabase/migrations/20260922_rsgp_initial.sql](supabase/migrations/20260922_rsgp_initial.sql), then enable email/password sign-up, set your site URL and configure SMTP/confirmation redirects as needed.
+1. Use the **repurposed RobloxGPT Community Dev Supabase project** (`qznmxbwhotgwmcrskdtd`) as RSGP's database. Wait until the Supabase project is healthy before running schema changes. Its initial inventory showed zero public tables and zero Auth users. Apply [supabase/migrations/20260922_rsgp_initial.sql](supabase/migrations/20260922_rsgp_initial.sql), then enable email/password sign-up, set your site URL and configure SMTP/confirmation redirects as needed.
 2. Import this repository into **Vercel** as a Next.js app. Set the environment variables in [.env.example](.env.example): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, `OPENAI_MODEL`, and `NEXT_PUBLIC_RSGP_ORIGIN`. The last one should be your public HTTPS Vercel origin. Keep the service-role and OpenAI keys server-only.
 3. Install [studio/RSGP.server.lua](studio/RSGP.server.lua) as a **local Roblox Studio plugin**, not as an in-game Script. Allow the plugin's HTTPS requests if Studio prompts for permission.
 4. Sign in to the site, create a project, generate a one-time pairing code, and paste the HTTPS site origin and code into the Studio plugin. Keep Studio in **Edit mode** while applying operations.
@@ -39,5 +39,7 @@ For local website development, copy `.env.example` to `.env.local`, fill the var
 The Vercel server verifies the Supabase user and project ownership before writing state. The plugin receives a high-entropy token through a one-use pairing code; token and code hashes are stored in Supabase. All AI mutations require user approval. The server does not expose the service-role key to the browser or plugin.
 
 Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the trust boundaries, milestones, and known gaps, including incomplete operation reconciliation and missing full snapshots/undo. Test on a disposable or backed-up Roblox place.
+
+The existing Supabase project is being repurposed for RSGP at the owner's request. This repository does not contain its service-role key or database password; set those server-side during Vercel deployment. A Supabase project rename, if wanted, is a dashboard setting and is not required for the API URL to work.
 
 The original `CodWasTaken/RobloxGPT-Studio` is private. RSGP reuses its **architectural concepts**, not its unpublished code. The public ForgeGUI integration is a feature/workflow reference; RSGP's code is written independently and does not depend on ForgeGUI's hosted backend.
