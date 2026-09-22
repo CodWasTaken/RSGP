@@ -58,6 +58,8 @@ status.Parent=root
 local token=nil
 local origin=nil
 local running=false
+local boundStudioId=nil
+local function currentStudioId() return tostring(game.PlaceId)..":"..tostring(game.GameId) end
 local function setStatus(message) status.Text=message end
 local function request(method,path,body)
  local headers={["Content-Type"]="application/json"}
@@ -178,10 +180,35 @@ local function createGui(p)
  gui.Parent=game:GetService("StarterGui")
  return gui:GetFullName().." (visual layout; buttons are not wired)"
 end
-local handlers={create_part=createPart,create_script=createScript,create_gui=createGui}
+local function installImage(p)
+ local assetId=p.robloxAssetId
+ if type(assetId)~="string" or not assetId:match("^[1-9]%d*$") or #assetId>20 then error("Invalid Roblox image ID") end
+ if type(p.kind)~="string" or not ({icon=true,thumbnail=true,texture=true,gui=true})[p.kind] then error("Invalid image type") end
+ local gui=Instance.new("ScreenGui")
+ gui.Name=safeName(p.name)
+ gui.ResetOnSpawn=false
+ gui:SetAttribute("RSGPAssetId",tostring(p.assetId or ""))
+ gui:SetAttribute("RSGPAssetType",p.kind)
+ local image=Instance.new("ImageLabel")
+ image.Name="ImagePreview"
+ image.AnchorPoint=Vector2.new(.5,.5)
+ image.Position=UDim2.fromScale(.5,.5)
+ image.Size=UDim2.new(.8,0,.6,0)
+ image.BackgroundTransparency=1
+ image.ScaleType=Enum.ScaleType.Fit
+ image.Image="rbxassetid://"..assetId
+ local sizeLimit=Instance.new("UISizeConstraint")
+ sizeLimit.MaxSize=Vector2.new(650,420)
+ sizeLimit.Parent=image
+ image.Parent=gui
+ gui.Parent=game:GetService("StarterGui")
+ return gui:GetFullName().." (Image property assigned; moderation, accessibility and rendering NOT verified)"
+end
+local handlers={create_part=createPart,create_script=createScript,create_gui=createGui,install_image=installImage}
 local function process(command)
  local worked,result=pcall(function()
   if not RunService:IsEdit() then error("Stop playtest before applying changes") end
+  if boundStudioId~=currentStudioId() then error("The connected Studio place changed; pair again") end
   if type(command.payload)~="table" or not handlers[command.kind] then error("Unsupported command") end
   ChangeHistoryService:SetWaypoint("Before RSGP "..command.kind)
   local path=handlers[command.kind](command.payload)
@@ -206,16 +233,18 @@ connectBtn.MouseButton1Click:Connect(function()
  local code=codeField.Text:lower():gsub("%s+","")
  if not code:match("^[0-9a-f]+$") or #code~=24 then setStatus("Enter the 24-character pairing code.") return end
  local ok,data=pcall(function()
-  return request("POST","/api/plugin/claim",{code=code,studioId=tostring(game.PlaceId)..":"..tostring(game.GameId),label=game.Name})
+  return request("POST","/api/plugin/claim",{code=code,studioId=currentStudioId(),label=game.Name})
  end)
  if not ok then setStatus("Pairing failed: "..tostring(data)) return end
  token=data.token
+ boundStudioId=currentStudioId()
  plugin:SetSetting("RSGPUrl",origin)
  codeField.Text=""
  running=true
  setStatus("Connected. Waiting for approved commands...")
  task.spawn(function()
   while running and token do
+   if boundStudioId~=currentStudioId() then setStatus("Studio place changed; reconnect."); running=false; token=nil; break end
    local success,payload=pcall(function() return request("GET","/api/plugin/next") end)
    if success and payload.command then process(payload.command)
    elseif not success then setStatus("Connection error: "..tostring(payload)); running=false; token=nil; break end
