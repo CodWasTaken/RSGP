@@ -6,7 +6,7 @@ export const runtime="nodejs";
 export const maxDuration=120;
 const BUCKET="rsgp-generated";
 type Ctx={params:Promise<{id:string}>};
-type AssetRow={id:string;kind:string;prompt:string;status:string;storage_path:string|null;error_code:string|null;size_bytes:number|null;created_at:string};
+type AssetRow={id:string;kind:string;prompt:string;status:string;storage_path:string|null;error_code:string|null;size_bytes:number|null;publication_status:string;roblox_asset_id:string|null;publication_error_code:string|null;created_at:string};
 
 export async function GET(req:Request,{params}:Ctx){
  try{
@@ -20,7 +20,7 @@ export async function GET(req:Request,{params}:Ctx){
    .lt("started_at",new Date(Date.now()-300000).toISOString());
   if(expireError)throw expireError;
   const {data,error}=await db.from("generated_assets")
-   .select("id,kind,prompt,status,storage_path,error_code,size_bytes,created_at")
+   .select("id,kind,prompt,status,storage_path,error_code,size_bytes,publication_status,roblox_asset_id,publication_error_code,created_at")
    .eq("project_id",id).eq("owner_id",uid).order("created_at",{ascending:false}).limit(40);
   if(error)throw error;
   const assets=await Promise.all((data??[]).map(async(asset:AssetRow)=>{
@@ -30,7 +30,7 @@ export async function GET(req:Request,{params}:Ctx){
     if(!signError&&signed)previewUrl=signed.signedUrl;
    }
    return {id:asset.id,kind:asset.kind,prompt:asset.prompt,status:asset.status,
-    errorCode:asset.error_code,sizeBytes:asset.size_bytes,createdAt:asset.created_at,previewUrl};
+    errorCode:asset.error_code,sizeBytes:asset.size_bytes,publicationStatus:asset.publication_status,robloxAssetId:asset.roblox_asset_id,publicationErrorCode:asset.publication_error_code,createdAt:asset.created_at,previewUrl};
   }));
   return Response.json({assets},{headers:{"Cache-Control":"no-store"}});
  }catch(error){return jsonError(error);}
