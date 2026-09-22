@@ -51,3 +51,14 @@ The review queue supports explicit rejection before an operation is delivered. G
 
 **Known remaining limitations:** one-minute leases are not refreshed during long operations; result delivery may require manual resolution even when an instance was successfully created. There is no transactionally atomic multi-command game build, full project backup, automated rollback, or independent verification that user-reported reconciliation is correct. The current command validation enforces shape, not full semantic safety of generated Luau. Studio behavior has not been live-tested.
 
+
+## Cloud Asset Lab: first image provider (September 2026 increment)
+
+A dedicated Supabase migration (`20260922_rsgp_generated_assets.sql`) creates a private `rsgp-generated` bucket, private `generated_assets` ledger, and a **service-role-only** transaction function `rsgp_reserve_image_generation`. An advisory transaction lock prevents concurrent requests from bypassing per-account limits: three operations per rolling hour and ten per rolling day. The request UUID is a durable idempotency key, unique across the ledger. It is atomically claimed from `reserved` to `generating`; no second invocation can claim the same request.
+
+The website presents explicit one-image generation (icons, thumbnails, textures, GUI art). The Vercel server calls the configured OpenAI image API (default `gpt-image-1-mini`), verifies a bounded PNG, computes a SHA-256 hash, and uploads bytes to the private bucket. The project's authenticated image API returns only ownership-checked, five-minute signed URLs—never the storage service key or provider API key. Signed URLs are temporary bearer links; treat them as sensitive.
+
+The lifecycle records `reserved -> generating -> ready`, or `failed` for an explicit provider rejection. Timeouts, unknown provider outcomes, malformed responses, storage failures, and stale generating records become `needs_reconciliation` without automatic paid retry. A successful generation is **not** publication, moderation, Roblox asset ownership, installation, playtesting or completion. Generated thumbnails and texture tiling remain AI output goals, not validated properties.
+
+Limitations: provider charges and actual entitlements are not measured yet; the counter is a protective cap rather than billing. Vercel function limits and model latency may still cause uncertain results. No provider-side idempotent recovery or automatic reconciliation is claimed. No Roblox upload or Studio installation has been implemented for these images. The migration has not been applied to a real RSGP project.
+
