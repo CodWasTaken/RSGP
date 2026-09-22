@@ -36,7 +36,7 @@ alter table public.generated_assets
   add column publication_error_code text;
 alter table public.commands drop constraint if exists commands_kind_check;
 alter table public.commands add constraint commands_kind_check
-  check (kind in ('create_part','create_script','create_gui','install_image'));
+  check (kind in ('create_part','create_script','create_gui','install_image','inspect_project'));
 -- For an install_image command the server reads the source asset from the bound project.
 alter table public.commands add column source_asset_id uuid references public.generated_assets(id) on delete set null;
 create index commands_source_asset_idx on public.commands(source_asset_id) where source_asset_id is not null;
