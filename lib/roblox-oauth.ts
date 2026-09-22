@@ -34,7 +34,7 @@ export function createAuthorization(){
  const url=new URL(OAUTH+"/authorize");
  for(const [name,value] of Object.entries({
   client_id:config.clientId,redirect_uri:config.redirectUri,scope:"openid profile asset:read asset:write",
-  response_type:"code",prompts:"login consent",state,code_challenge:challenge,code_challenge_method:"S256",
+  response_type:"code",prompt:"login consent",state,code_challenge:challenge,code_challenge_method:"S256",
  }))url.searchParams.set(name,value);
  return {url:url.toString(),state,verifier};
 }
