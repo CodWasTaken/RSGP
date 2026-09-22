@@ -21,3 +21,8 @@
 .asset-kind{font-size:10px;color:#c6adff;font-weight:800;letter-spacing:.08em}
 .asset-description a{color:#b89aff;font-weight:700;font-size:11px}
 .asset-description small{display:block;color:#e2bd80;font-size:11px;margin-top:5px}
+
+/* Explicit connection selection guards all user-approved Studio mutations. */
+.target-select{display:grid;gap:6px;font-size:12px;color:#d0c9ea;margin:10px 0}
+.target-select select{width:100%;min-width:0;padding:9px 11px;border:1px solid #696084;border-radius:9px;background:#151525;color:#f5f2ff}
+.change-preview{overflow-wrap:anywhere}
