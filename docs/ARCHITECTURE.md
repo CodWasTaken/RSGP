@@ -60,7 +60,7 @@ The website presents explicit one-image generation (icons, thumbnails, textures,
 
 The lifecycle records `reserved -> generating -> ready`, or `failed` for an explicit provider rejection. Timeouts, unknown provider outcomes, malformed responses, storage failures, and stale generating records become `needs_reconciliation` without automatic paid retry. A successful generation is **not** publication, moderation, Roblox asset ownership, installation, playtesting or completion. Generated thumbnails and texture tiling remain AI output goals, not validated properties.
 
-Limitations: provider charges and actual entitlements are not measured yet; the counter is a protective cap rather than billing. Vercel function limits and model latency may still cause uncertain results. No provider-side idempotent recovery or automatic reconciliation is claimed. No Roblox upload or Studio installation has been implemented for these images. At time of writing, the migrations have not been applied; verify the repurposed project is healthy before applying.
+Limitations: provider charges and actual entitlements are not measured yet; the counter is a protective cap rather than billing. Vercel function limits and model latency may still cause uncertain results. No provider-side idempotent recovery or automatic reconciliation is claimed. No Roblox upload or Studio installation has been implemented for these images. The migrations were applied after restoration; no RSGP browser or Studio integration has been live-tested.
 
 
 ## Creator-owned Roblox Image publication (September 2026 increment)
@@ -80,4 +80,10 @@ The fourth SQL migration, `20260922_rsgp_roblox_publication.sql`, adds per-accou
 
 ## Database repurposing decision (2026-09-22)
 
-The owner approved reusing Supabase project `qznmxbwhotgwmcrskdtd` (formerly RobloxGPT Community Dev) for RSGP. The initial read-only inventory showed no public application tables, no Auth users and no recorded migrations. Do not drop existing schemas or reuse old RGPT service keys in the browser. Run the four RSGP SQL migrations in order **after** Supabase restore/Storage initialization finishes, inspect security advisors, and configure the site's server-only Vercel secrets. Project display name may still show RobloxGPT until renamed in Supabase Dashboard.
+The owner approved reusing Supabase project `qznmxbwhotgwmcrskdtd` (formerly RobloxGPT Community Dev) for RSGP. The **completed post-restore inventory** showed no existing public application tables, but one existing Auth user, two historical RGPT migrations, and eight RGPT tables in the `community` and `private` schemas. The initial checks during `COMING_UP` were incomplete. Do not drop existing schemas or reuse old RGPT service keys in the browser. All four RSGP SQL migrations were applied successfully after the project became `ACTIVE_HEALTHY`. The eight new RSGP public tables have RLS enabled, and `rsgp-generated` is a private Storage bucket. RGPT's user, history and legacy schemas were preserved. Configure the site's server-only Vercel secrets and review Supabase security advisors. Project display name may still show RobloxGPT until renamed in Supabase Dashboard.
+
+## Read-only Studio inventory
+
+A paired Studio plugin tags **newly created** RSGP parts, scripts, and GUI roots with the project and command ID. The owner can request an explicit `inspect_project` read-only command from the site. The plugin scans tagged instances in the paired place and reports bounded counts and sample paths. This is plugin-reported Edit-mode evidence, not an independent gameplay test, screenshot, moderation verdict, or assurance that older untagged objects are included.
+
+**Supabase review:** The security advisor reported an Auth leaked-password-protection setting currently disabled, which must be enabled in the Auth dashboard if supported by the project plan. The no-policy advisories on server-only credentials and private RGPT tables are intentional deny-by-default protections, not missing public grants. Performance advisories identified optional foreign-key indexes; add those separately without dropping RGPT indexes.
