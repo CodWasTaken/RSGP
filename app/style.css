@@ -7,3 +7,17 @@
 .reconcile{border:1px solid #7b653f;background:#31281e;border-radius:8px;padding:10px;margin-top:9px;}
 .reconcile p{font-size:11px;color:#f6ddab;margin-bottom:9px;}
 .reconcile .secondary{font-size:11px;}
+
+/* Private asset lab: image previews come from short-lived Supabase signed URLs. */
+.asset-form{display:grid;gap:13px}
+.asset-form label{display:grid;gap:6px;color:#d0c9ea;font-size:11px;font-weight:700}
+.asset-form select{width:100%;padding:10px 12px;border:1px solid #343443;border-radius:9px;background:#0f101a;color:var(--text)}
+.asset-form .primary{width:100%}
+.asset-list{display:grid;gap:12px;margin-top:20px}
+.asset{background:#0e101a;border:1px solid #303041;border-radius:11px;overflow:hidden}
+.asset img{width:100%;max-height:230px;object-fit:contain;background:#202033;display:block}
+.asset-description{padding:11px}
+.asset-description p{font-size:12px;margin:6px 0 10px;overflow-wrap:anywhere}
+.asset-kind{font-size:10px;color:#c6adff;font-weight:800;letter-spacing:.08em}
+.asset-description a{color:#b89aff;font-weight:700;font-size:11px}
+.asset-description small{display:block;color:#e2bd80;font-size:11px;margin-top:5px}
