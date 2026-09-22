@@ -17,6 +17,7 @@ create table public.generated_assets (
   sha256 text check (sha256 is null or sha256 ~ '^[a-f0-9]{64}$'),
   size_bytes integer check (size_bytes is null or size_bytes between 1 and 12582912),
   error_code text,
+  started_at timestamptz,
   created_at timestamptz not null default now(),
   completed_at timestamptz,
   check (status <> 'ready' or (storage_path is not null and sha256 is not null and size_bytes is not null))
@@ -58,7 +59,15 @@ begin
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtext(p_owner_id::text));
   select a.id into existing_id from public.generated_assets a where a.id = p_request_id;
   if existing_id is not null then
-    -- Idempotent duplicate is returned; the API must not submit another provider request.
+    -- Do not allow a caller to reuse another request ID, project or prompt.
+    if not exists (
+      select 1 from public.generated_assets a
+      where a.id = p_request_id and a.project_id = p_project_id
+        and a.owner_id = p_owner_id and a.kind = p_kind and a.prompt = p_prompt
+    ) then
+      raise exception 'Generation request ID collision' using errcode = '23505';
+    end if;
+    -- Idempotent duplicate is returned; the API must atomically claim 'reserved'.
     return existing_id;
   end if;
   if (select count(*) from public.generated_assets a
