@@ -1,7 +1,7 @@
 import {admin,authenticate,HttpError,jsonError} from "@/lib/supabase";
+import {canProposeUndo} from "@/lib/studio-review";
 export const runtime="nodejs";
 type Ctx={params:Promise<{id:string}>};
-const REVERSIBLE=["create_part","create_script","create_gui","install_image"];
 export async function POST(req:Request,{params}:Ctx){
  try{
   const {id}=await params,uid=await authenticate(req),db=admin();
@@ -10,7 +10,7 @@ export async function POST(req:Request,{params}:Ctx){
    .eq("id",id).eq("owner_id",uid).maybeSingle();
   if(sourceError)throw sourceError;
   if(!source)throw new HttpError(404,"Command not found");
-  if(source.status!=="completed"||!REVERSIBLE.includes(source.kind))
+  if(!canProposeUndo(source))
    throw new HttpError(409,"Only reported-applied parts, scripts and GUI/image roots can be undone");
   // Manual reports and previous plugin versions may not have tagged an instance.
   // The Studio plugin must confirm the matching root before deleting anything.
