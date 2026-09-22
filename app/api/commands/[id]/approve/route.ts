@@ -18,7 +18,7 @@ export async function POST(req:Request,{params}:Ctx){
    .select("id,studio_id,project_id,owner_id,active,last_seen_at").eq("id",connectionId)
    .eq("project_id",command.project_id).eq("owner_id",uid).eq("active",true).maybeSingle();
   if(connError)throw connError;
-  if(!isLiveStudioTarget(conn,command.project_id,uid))
+  if(!conn||!isLiveStudioTarget(conn,command.project_id,uid))
    throw new HttpError(409,"Selected Studio session is offline; reconnect or choose a live session");
   const {data,error:updateError}=await db.from("commands")
    .update({status:"queued",connection_id:conn.id}).eq("id",id)
