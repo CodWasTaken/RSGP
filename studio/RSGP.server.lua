@@ -4,6 +4,7 @@ local HttpService=game:GetService("HttpService")
 local RunService=game:GetService("RunService")
 local ChangeHistoryService=game:GetService("ChangeHistoryService")
 local Workspace=game:GetService("Workspace")
+local CollectionService=game:GetService("CollectionService")
 local toolbar=plugin:CreateToolbar("RSGP")
 local toggle=toolbar:CreateButton("Open RSGP","Connect Studio to your RSGP workspace","")
 local info=DockWidgetPluginGuiInfo.new(Enum.InitialDockState.Right,true,false,350,400,300,300)
@@ -59,6 +60,7 @@ local token=nil
 local origin=nil
 local running=false
 local boundStudioId=nil
+local boundProjectId=nil
 local function currentStudioId() return tostring(game.PlaceId)..":"..tostring(game.GameId) end
 local function setStatus(message) status.Text=message end
 local function request(method,path,body)
@@ -83,7 +85,12 @@ local function safeName(value)
  if type(value)~="string" or #value<1 or #value>80 or not string.match(value,"^[%w _%-]+$") then error("Invalid name") end
  return value
 end
-local function createPart(p)
+local function tagGenerated(instance,commandId)
+ instance:SetAttribute("RSGPProjectId",boundProjectId)
+ instance:SetAttribute("RSGPCommandId",commandId)
+ CollectionService:AddTag(instance,"RSGPGenerated")
+end
+local function createPart(p,commandId)
  local position=number3(p.position,-2048,2048)
  local size=number3(p.size,.1,256)
  local color=number3(p.color,0,255)
@@ -93,10 +100,11 @@ local function createPart(p)
  part.Size=size
  part.Position=position
  part.Color=Color3.fromRGB(color.X,color.Y,color.Z)
+ tagGenerated(part,commandId)
  part.Parent=Workspace
  return part:GetFullName()
 end
-local function createScript(p)
+local function createScript(p,commandId)
  local parents={
   ServerScriptService=game:GetService("ServerScriptService"),
   ReplicatedStorage=game:GetService("ReplicatedStorage"),
@@ -110,10 +118,11 @@ local function createScript(p)
  -- ModuleScripts cannot be disabled; they do not execute until explicitly required.
  if p.className~="ModuleScript" then scriptObj.Disabled=true end
  scriptObj.Source=p.source
+ tagGenerated(scriptObj,commandId)
  scriptObj.Parent=parents[p.parent]
  return scriptObj:GetFullName().." (review required before use)"
 end
-local function createGui(p)
+local function createGui(p,commandId)
  local color=number3(p.color,0,255)
  local elements=p.elements or {}
  if type(elements)~="table" or #elements>8 then error("Invalid GUI elements") end
@@ -177,10 +186,11 @@ local function createGui(p)
   end
   child.Parent=frame
  end
+ tagGenerated(gui,commandId)
  gui.Parent=game:GetService("StarterGui")
  return gui:GetFullName().." (visual layout; buttons are not wired)"
 end
-local function installImage(p)
+local function installImage(p,commandId)
  local assetId=p.robloxAssetId
  if type(assetId)~="string" or not assetId:match("^[1-9]%d*$") or #assetId>20 then error("Invalid Roblox image ID") end
  if type(p.kind)~="string" or not ({icon=true,thumbnail=true,texture=true,gui=true})[p.kind] then error("Invalid image type") end
@@ -201,17 +211,44 @@ local function installImage(p)
  sizeLimit.MaxSize=Vector2.new(650,420)
  sizeLimit.Parent=image
  image.Parent=gui
+ tagGenerated(gui,commandId)
  gui.Parent=game:GetService("StarterGui")
  return gui:GetFullName().." (Image property assigned; moderation, accessibility and rendering NOT verified)"
 end
-local handlers={create_part=createPart,create_script=createScript,create_gui=createGui,install_image=installImage}
+local function inspectProject(p)
+ if p.scope~="rsgp_tagged" then error("Invalid inventory scope") end
+ local total,parts,scripts,guis,images,disabled=0,0,0,0,0,0
+ local samples={}
+ for _,instance in ipairs(CollectionService:GetTagged("RSGPGenerated")) do
+  if instance:IsDescendantOf(game) and instance:GetAttribute("RSGPProjectId")==boundProjectId then
+   total+=1
+   if instance:IsA("BasePart") then parts+=1
+   elseif instance:IsA("LuaSourceContainer") then
+    scripts+=1
+    if instance:IsA("Script") or instance:IsA("LocalScript") then
+     if instance.Disabled then disabled+=1 end
+    end
+   elseif instance:IsA("ScreenGui") then
+    guis+=1
+    local preview=instance:FindFirstChild("ImagePreview")
+    if preview and preview:IsA("ImageLabel") then images+=1 end
+   end
+   if #samples<3 then table.insert(samples,instance:GetFullName()) end
+   if total>=10000 then break end
+  end
+ end
+ return HttpService:JSONEncode({scope="rsgp_tagged",taggedInstances=total,parts=parts,scripts=scripts,
+  disabledScripts=disabled,guis=guis,imagePreviews=images,samples=samples,truncated=total>=10000,
+  note="Inventory only; no playtest or visual rendering verified"})
+end
+local handlers={create_part=createPart,create_script=createScript,create_gui=createGui,install_image=installImage,inspect_project=inspectProject}
 local function process(command)
  local worked,result=pcall(function()
   if not RunService:IsEdit() then error("Stop playtest before applying changes") end
   if boundStudioId~=currentStudioId() then error("The connected Studio place changed; pair again") end
   if type(command.payload)~="table" or not handlers[command.kind] then error("Unsupported command") end
   ChangeHistoryService:SetWaypoint("Before RSGP "..command.kind)
-  local path=handlers[command.kind](command.payload)
+  local path=handlers[command.kind](command.payload,command.id)
   ChangeHistoryService:SetWaypoint("After RSGP "..command.kind)
   return path
  end)
@@ -238,6 +275,7 @@ connectBtn.MouseButton1Click:Connect(function()
  if not ok then setStatus("Pairing failed: "..tostring(data)) return end
  token=data.token
  boundStudioId=currentStudioId()
+ boundProjectId=data.projectId
  plugin:SetSetting("RSGPUrl",origin)
  codeField.Text=""
  running=true
