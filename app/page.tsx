@@ -8,6 +8,7 @@ type Project={id:string;name:string;created_at:string};
 type Connection={id:string;label:string;studio_id:string;active:boolean;last_seen_at:string|null};
 type Command={id:string;kind:string;payload:Record<string,unknown>;status:string;result:{detail?:string}|null};
 type Message={id:string;role:string;content:string};
+type ImageAsset={id:string;kind:string;prompt:string;status:string;errorCode:string|null;sizeBytes:number|null;createdAt:string;previewUrl:string|null};
 type State={project:Project;connections:Connection[];commands:Command[];messages:Message[]};
 const supabase=browserClient();
 const labels:Record<string,string>={pending_approval:"Review required",queued:"Queued for Studio",leased:"Applying in Studio",needs_reconciliation:"Needs manual reconciliation",completed:"Reported applied",failed:"Failed / rejected"};
@@ -18,6 +19,7 @@ export default function Home(){
  const [loginMode,setLoginMode]=useState<"login"|"signup">("login");
  const [projects,setProjects]=useState<Project[]>([]),[projectId,setProjectId]=useState("");
  const [state,setState]=useState<State|null>(null),[name,setName]=useState(""),[prompt,setPrompt]=useState("");
+ const [assets,setAssets]=useState<ImageAsset[]>([]),[imagePrompt,setImagePrompt]=useState(""),[imageKind,setImageKind]=useState("icon");
  const [pair,setPair]=useState<{code:string;origin:string;expiresAt:string}|null>(null);
  const [busy,setBusy]=useState(false),[notice,setNotice]=useState("");
  const projectIdRef=useRef(projectId);
@@ -30,6 +32,12 @@ export default function Home(){
   if(!response.ok)throw Error(data.error||"Request failed");
   return data;
  },[]);
+ const refreshAssets=useCallback(async ()=>{
+  const id=projectIdRef.current;
+  if(!id)return;
+  try{const data=await api("/api/projects/"+id+"/images");if(projectIdRef.current===id)setAssets(data.assets);}
+  catch{/* transient polling failure */}
+ },[api]);
  const refresh=useCallback(async ()=>{
   const id=projectIdRef.current;
   if(!id)return;
@@ -42,7 +50,7 @@ export default function Home(){
   return ()=>subscription.unsubscribe();
  },[]);
  useEffect(()=>{
-  if(!session){setProjects([]);setProjectId("");setState(null);return;}
+  if(!session){setProjects([]);setProjectId("");setState(null);setAssets([]);return;}
   void api("/api/projects").then(d=>setProjects(d.projects)).catch(e=>setNotice(e.message));
  },[session,api]);
  useEffect(()=>{
@@ -51,6 +59,12 @@ export default function Home(){
   const timer=setInterval(()=>void refresh(),3500);
   return ()=>clearInterval(timer);
  },[projectId,refresh]);
+ useEffect(()=>{
+  if(!projectId)return;
+  void refreshAssets();
+  const timer=setInterval(()=>void refreshAssets(),45000);
+  return ()=>clearInterval(timer);
+ },[projectId,refreshAssets]);
  async function auth(e:FormEvent){
   e.preventDefault();setBusy(true);setNotice("");
   try{
@@ -81,7 +95,7 @@ export default function Home(){
   <aside className="sidebar">
    <div className="brand"><span className="logo-mark">R</span><span>RSGP <small>GAME PRINTER</small></span></div>
    <div className="sidebar-heading">YOUR PROJECTS</div>
-   <div className="project-list">{projects.map(p=><button key={p.id} className={"project-item "+(projectId===p.id?"selected":"")} onClick={()=>{setProjectId(p.id);setPair(null);setState(null);}}><span className="project-glyph">◈</span>{p.name}</button>)}</div>
+   <div className="project-list">{projects.map(p=><button key={p.id} className={"project-item "+(projectId===p.id?"selected":"")} onClick={()=>{setProjectId(p.id);setPair(null);setState(null);setAssets([]);}}><span className="project-glyph">◈</span>{p.name}</button>)}</div>
    <form onSubmit={e=>{e.preventDefault();void action(async()=>{const d=await api("/api/projects",{method:"POST",body:JSON.stringify({name})});setProjects(ps=>[d.project,...ps]);setProjectId(d.project.id);setName("");});}}>
     <input value={name} onChange={e=>setName(e.target.value)} maxLength={80} placeholder="New project name" required/>
     <button className="secondary" disabled={busy}>+ Create project</button>
@@ -108,6 +122,27 @@ export default function Home(){
        <button className="secondary" disabled={busy} onClick={()=>void action(async()=>setPair(await api("/api/projects/"+projectId+"/pair",{method:"POST"})))}>Generate pairing code</button>
        {pair&&<div className="pair-code"><span>EXPIRES {new Date(pair.expiresAt).toLocaleTimeString()}</span><code>{pair.code}</code><button className="text-button" onClick={()=>void navigator.clipboard.writeText(pair.code)}>Copy code</button><small>Plugin endpoint: {pair.origin}</small></div>}
        {state?.connections.filter(c=>c.active).map(c=><div className="connection-row" key={c.id}><span>◉ {c.label}<small>{c.last_seen_at?"Seen "+new Date(c.last_seen_at).toLocaleTimeString():"Awaiting plugin"}</small></span><button className="text-button danger" onClick={()=>void action(async()=>{await api("/api/projects/"+projectId+"/connections",{method:"POST",body:JSON.stringify({connectionId:c.id})});await refresh();})}>Revoke</button></div>)}
+      </div>
+      <div className="panel asset-panel">
+       <div className="section-head"><span className="eyebrow">ASSET LAB</span><span className="mini">{assets.length} recent</span></div>
+       <h3>Print a game asset</h3><p className="muted">Generate a private PNG. Uses API credits. Roblox publication and Studio insertion are not included yet.</p>
+       <form className="asset-form" onSubmit={e=>{e.preventDefault();void action(async()=>{try{
+        await api("/api/projects/"+projectId+"/images",{method:"POST",body:JSON.stringify({kind:imageKind,prompt:imagePrompt,requestId:crypto.randomUUID()})});
+        setImagePrompt("");setNotice("Image generated privately. Preview it in the asset library.");
+       }finally{await refreshAssets();}});}}>
+        <label>Asset type<select value={imageKind} onChange={e=>setImageKind(e.target.value)}><option value="icon">Game icon</option><option value="thumbnail">Thumbnail</option><option value="texture">Tileable texture</option><option value="gui">GUI art</option></select></label>
+        <label>Visual brief<textarea value={imagePrompt} onChange={e=>setImagePrompt(e.target.value)} maxLength={900} placeholder="A glowing crystal compass on a deep-blue background…" rows={3} required/></label>
+        <button className="primary" disabled={busy||imagePrompt.trim().length<8}>{busy?"Working…":"Generate one image ↗"}</button>
+       </form>
+       <div className="asset-list">{assets.map(asset=><article className="asset" key={asset.id}>
+         {asset.previewUrl&&<img src={asset.previewUrl} alt={asset.prompt} loading="lazy"/>}
+         <div className="asset-description"><span className="asset-kind">{asset.kind.toUpperCase()} · {asset.status.replaceAll("_"," ")}</span>
+          <p>{asset.prompt}</p>
+          {asset.previewUrl&&<a href={asset.previewUrl} target="_blank" rel="noopener noreferrer">Open / save PNG ↗</a>}
+          {asset.status==="needs_reconciliation"&&<small>Outcome uncertain: do not resubmit automatically.</small>}
+          {asset.status==="failed"&&<small>Generation failed: {asset.errorCode||"provider error"}</small>}
+         </div>
+        </article>)}</div>
       </div>
       <div className="panel changes"><div className="section-head"><span className="eyebrow">BUILD QUEUE</span><span className="mini">{state?.commands.length||0} changes</span></div>
        {!state?.commands.length?<p className="muted">Your AI-generated changes appear here for review.</p>:state?.commands.map(c=><div className="change" key={c.id}>
