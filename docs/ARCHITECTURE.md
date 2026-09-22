@@ -34,7 +34,7 @@ Roblox Studio plugin -- HTTPS claim/poll/report ----+
 
 ## Next milestones
 
-1. Provision a **new** RSGP Supabase project and Vercel deployment, install/test the Studio plugin and verify signup, pairing and project ownership.
+1. Use the **repurposed** RSGP Supabase project and Vercel deployment, install/test the Studio plugin and verify signup, pairing and project ownership.
 2. Add versioned project snapshots, reversible edits, explicit lease reconciliation and richer native Roblox GUI generation.
 3. Add a provider-neutral asset pipeline for images, textures, Roblox-native meshes, optional external 3D/audio providers, publication, moderation, and Studio verification.
 4. Add game templates, interactive playtest evidence, screenshot review, iterative fixes and release gates. Add paid tiers and quotas only after the end-to-end build workflow is reliable.
@@ -60,7 +60,7 @@ The website presents explicit one-image generation (icons, thumbnails, textures,
 
 The lifecycle records `reserved -> generating -> ready`, or `failed` for an explicit provider rejection. Timeouts, unknown provider outcomes, malformed responses, storage failures, and stale generating records become `needs_reconciliation` without automatic paid retry. A successful generation is **not** publication, moderation, Roblox asset ownership, installation, playtesting or completion. Generated thumbnails and texture tiling remain AI output goals, not validated properties.
 
-Limitations: provider charges and actual entitlements are not measured yet; the counter is a protective cap rather than billing. Vercel function limits and model latency may still cause uncertain results. No provider-side idempotent recovery or automatic reconciliation is claimed. No Roblox upload or Studio installation has been implemented for these images. The migration has not been applied to a real RSGP project.
+Limitations: provider charges and actual entitlements are not measured yet; the counter is a protective cap rather than billing. Vercel function limits and model latency may still cause uncertain results. No provider-side idempotent recovery or automatic reconciliation is claimed. No Roblox upload or Studio installation has been implemented for these images. At time of writing, the migrations have not been applied; verify the repurposed project is healthy before applying.
 
 
 ## Creator-owned Roblox Image publication (September 2026 increment)
@@ -75,5 +75,9 @@ The fourth SQL migration, `20260922_rsgp_roblox_publication.sql`, adds per-accou
 
 **Studio integration:** The website creates an owner-reviewable `install_image` proposal from an `approved` or `manual_unverified` asset record. A bound Studio plugin creates a native `ScreenGui/ImageLabel` and assigns `rbxassetid://<id>`. The returned path is evidence only that the property was assigned; it is not visual proof that the asset is loaded, approved or usable in the intended place. Gameplay screenshots, failure detection and release verification remain future work. The plugin checks its original place identity before executing commands.
 
-**Deployment:** Requires four SQL migrations in order, dedicated Supabase/Vercel configuration, registered Roblox OAuth app and approved scopes, and a stable token encryption key. No Roblox OAuth credentials, published assets or live Studio runtime have been tested from this repository.
+**Deployment:** Requires four SQL migrations in order, configured Supabase/Vercel credentials, registered Roblox OAuth app and approved scopes, and a stable token encryption key. No Roblox OAuth credentials, published assets or live Studio runtime have been tested from this repository.
 
+
+## Database repurposing decision (2026-09-22)
+
+The owner approved reusing Supabase project `qznmxbwhotgwmcrskdtd` (formerly RobloxGPT Community Dev) for RSGP. The initial read-only inventory showed no public application tables, no Auth users and no recorded migrations. Do not drop existing schemas or reuse old RGPT service keys in the browser. Run the four RSGP SQL migrations in order **after** Supabase restore/Storage initialization finishes, inspect security advisors, and configure the site's server-only Vercel secrets. Project display name may still show RobloxGPT until renamed in Supabase Dashboard.
