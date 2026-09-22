@@ -1,4 +1,5 @@
 import {admin,authenticate,bodyJson,HttpError,jsonError} from "@/lib/supabase";
+import {isLiveStudioTarget} from "@/lib/studio-review";
 export const runtime="nodejs";
 type Ctx={params:Promise<{id:string}>};
 export async function POST(req:Request,{params}:Ctx){
@@ -14,10 +15,10 @@ export async function POST(req:Request,{params}:Ctx){
   if(command.status!=="pending_approval")throw new HttpError(409,"Command already reviewed");
   // No implicit fallback to the newest connection: multi-place projects must be explicit.
   const {data:conn,error:connError}=await db.from("studio_connections")
-   .select("id,studio_id,last_seen_at").eq("id",connectionId)
+   .select("id,studio_id,project_id,owner_id,active,last_seen_at").eq("id",connectionId)
    .eq("project_id",command.project_id).eq("owner_id",uid).eq("active",true).maybeSingle();
   if(connError)throw connError;
-  if(!conn?.last_seen_at||Date.now()-Date.parse(conn.last_seen_at)>20000)
+  if(!isLiveStudioTarget(conn,command.project_id,uid))
    throw new HttpError(409,"Selected Studio session is offline; reconnect or choose a live session");
   const {data,error:updateError}=await db.from("commands")
    .update({status:"queued",connection_id:conn.id}).eq("id",id)
